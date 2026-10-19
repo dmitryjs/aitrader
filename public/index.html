@@ -9,6 +9,7 @@
 <p class="eyebrow">СЛЕДУЮЩИЙ ШАГ</p>
 <h1 id="coach-title">Начнём с тестовых денег</h1>
 <p id="coach-body">Я проверю стратегию и покажу, что делать дальше.</p>
+<p id="coach-proof" class="muted" hidden></p>
 <dl id="coach-levels" hidden><div><dt>Цена покупки</dt><dd id="coach-entry"></dd></div><div><dt>Продажа при росте</dt><dd id="coach-target"></dd></div><div><dt>Выход при падении</dt><dd id="coach-stop"></dd></div></dl>
 <button id="coach-action" class="primary">Начать тренировку</button>
 <p id="coach-result" hidden>Результат тренировки: 0 USDT</p>
@@ -32,7 +33,7 @@
 <div id="trade-list"><div class="empty-history"><h3>Здесь будут твои сделки</h3><p>История появится после первой учебной продажи.</p></div></div>
 <button id="history-more" class="text-button" hidden>Показать ещё</button>
 </section>
-<details id="advanced"><summary>Настройки и подробности <small>0.5.0</small></summary><details id="setup" open><summary>Подключение</summary><label id="backend-label">Адрес сервера Vercel<input id="backend" type="url" placeholder="https://проект.vercel.app"></label><label>Код доступа к помощнику<input id="token" type="password" autocomplete="off" placeholder="Значение APP_ACCESS_TOKEN"></label><p class="muted">Это отдельный код доступа. Ключи Polza и Bybit вводятся только в настройках Vercel.</p><button id="connect">Подключить</button><button id="disconnect">Выйти и удалить код</button></details><p id="status" role="status">Сервер ещё не проверен.</p><nav><button data-page="watch">Наблюдение</button><button data-page="chat">Помощник</button><button data-page="data">Данные</button><button data-page="risk">Сделка</button></nav><section id="watch" class="page">
+<details id="advanced"><summary>Настройки и подробности <small>0.5.1</small></summary><details id="setup" open><summary>Подключение</summary><label id="backend-label">Адрес сервера Vercel<input id="backend" type="url" placeholder="https://проект.vercel.app"></label><label>Код доступа к помощнику<input id="token" type="password" autocomplete="off" placeholder="Значение APP_ACCESS_TOKEN"></label><p class="muted">Это отдельный код доступа. Ключи Polza и Bybit вводятся только в настройках Vercel.</p><button id="connect">Подключить</button><button id="disconnect">Выйти и удалить код</button></details><p id="status" role="status">Сервер ещё не проверен.</p><nav><button data-page="watch">Наблюдение</button><button data-page="chat">Помощник</button><button data-page="data">Данные</button><button data-page="risk">Сделка</button></nav><section id="watch" class="page">
 <h2>Помощник рядом с терминалом</h2>
 <p class="muted">Определяет спотовую пару, читает названия кнопок и положение мыши в разрешённой вкладке. Данные рынка получает через API. Снимки для этого режима не нужны.</p>
 <label id="watch-symbol-label">Монета<select id="watch-symbol"><option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option></select></label>

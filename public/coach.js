@@ -1,7 +1,23 @@
-import {openPaper} from './paper.js';
+import {openPaper,researchAllowed} from './paper.js';
+export function gateSummary(report){
+ const money=n=>Number(n).toLocaleString('ru-RU',{maximumFractionDigits:2});
+ const failures=[];
+ for(const [key,label] of [['validation','Проверочный период'],['finalTest','Финальный период'],['stress','Двойная комиссия']]){
+  const pnl=report?.[key]?.pnl;
+  if(!Number.isFinite(pnl))failures.push(label+': результат отсутствует');
+  else if(pnl<=0)failures.push(label+': '+money(pnl)+' USDT (нужен результат выше нуля)');
+ }
+ const count=report?.finalTest?.tradeCount,dd=report?.finalTest?.maxDrawdownPercent;
+ if(!Number.isFinite(count))failures.push('Количество сделок неизвестно');
+ else if(count<20)failures.push('В финальном периоде '+count+' сделок, требуется минимум 20');
+ if(!Number.isFinite(dd))failures.push('Просадка неизвестна');
+ else if(dd>5)failures.push('Падение баланса от максимума: '+money(dd)+'%, предел 5%');
+ return failures.join('. ')+(failures.length?'.':'Причина отказа отсутствует в отчёте.');
+}
 // The instruction is derived from verified state, never from free-form model text.
 export function coachView({running=false,preparing=false,error='',report=null,paper=null,context=null,snapshot=null,now=Date.now()}){
- const view=(title,body,label,action=null,levels=null)=>({title,body,label,action,levels});
+ const notice=report?.experimentReady&&report.paperGate!==true?'Историческая проверка не пройдена. '+gateSummary(report):'';
+ const view=(title,body,label,action=null,levels=null)=>({title,body,label,action,levels,notice});
  const money=n=>Number(n).toLocaleString('ru-RU',{maximumFractionDigits:2});
  if(preparing)return view('Проверяю, можно ли начинать','Загружаю историю и проверяю стратегию. Пока ничего не покупай.','Проверка…');
  if(error)return view('Сейчас ничего не покупать',error,'Повторить',running?'retry':'start');
@@ -12,7 +28,7 @@ export function coachView({running=false,preparing=false,error='',report=null,pa
  if(!fresh)return view('Проверяю текущую цену','Для решения нужны свежие данные. Пока ничего не покупай.','Жду данные');
  if(paper?.position){const p=paper.position;return view('BTC куплен виртуально. Теперь ждём',`Продам виртуальную позицию при достижении цели или уровня ограничения убытка. Оставь панель открытой.`, 'Ждём продажи',null,{entry:p.entry,stop:p.stop,target:p.target,qty:p.qty,cost:p.cost});}
  if(!report?.experimentReady||!Number.isFinite(report.dataReceivedAt)||now-report.dataReceivedAt>86400000)return view('Нужно проверить стратегию','Проверку и подготовку виртуального счёта выполню сам.','Проверить и продолжить','prepare');
- if(!report.paperGate)return view('Сейчас ничего не покупать','Стратегия не прошла историческую проверку. Оснований для покупки нет.','Покупка недоступна');
+ if(report.paperGate!==true&&!researchAllowed(paper,report))return view('Стратегия не прошла проверку','Можно исследовать её только на виртуальных деньгах. Кнопка включает эксперимент, но не покупает BTC и не делает стратегию проверенной.','Тестировать на виртуальных деньгах','research');
  if(context.symbol!=='BTCUSDT')return view('Открой BTC/USDT на Bybit','Первая стратегия работает только с биткоином. После перехода продолжу автоматически.','Жду BTC/USDT');
  if(paper?.halted)return view('На сегодня остановились','Сработал лимит потерь учебного счёта. Новые покупки отключены.','Покупка недоступна');
  if(!paper)return view('Подготовлю тестовый счёт','Создам 1 000 виртуальных USDT. Реальные деньги не нужны.','Продолжить','prepare');
@@ -23,5 +39,5 @@ export function coachView({running=false,preparing=false,error='',report=null,pa
  }
  const last=paper.trades.at(-1);
  if(last)return view('Виртуальная сделка закрыта',`Результат сделки: ${last.pnl>=0?'+':''}${money(last.pnl)} USDT. Сейчас новую покупку не делаем — ждём следующего сигнала.`,'Ждём следующего сигнала');
- return view('Сейчас ничего не покупать','Условия для входа ещё не появились. Я слежу за ценой и покажу, когда появится учебная покупка.','Ждём сигнала');
+ return view('Сейчас ничего не покупать','Условия для входа ещё не появились. Проверка сигнала — после закрытия каждого часа. Я покажу учебную покупку, когда условия совпадут. Сделок сегодня может не быть.','Ждём сигнала');
 }

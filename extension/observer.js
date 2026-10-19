@@ -1,6 +1,6 @@
 import {initDashboard} from './dashboard.js';
 import {coachView} from './coach.js';
-import {createPaper,openPaper,markPaper} from './paper.js';
+import {createPaper,openPaper,markPaper,enableResearch,researchAllowed} from './paper.js';
 export async function initObserver({api,extension,showPage,fmt}){
  const $=s=>document.querySelector(s);
  const renderDashboard=initDashboard();
@@ -12,6 +12,7 @@ export async function initObserver({api,extension,showPage,fmt}){
  function showCoach(){
   renderDashboard({paper,running,context,snapshot:lastStrategy});
   const v=coachView({running,preparing,error:coachError,report,paper,context,snapshot:lastStrategy});coachAction=v.action;
+  $('#coach-proof').textContent=v.notice;$('#coach-proof').hidden=!v.notice;
   $('#coach-title').textContent=v.title;$('#coach-body').textContent=v.body;$('#coach-action').textContent=v.label;$('#coach-action').disabled=!v.action||preparing;
   $('#coach-pause').hidden=!running&&!preparing;$('#coach-levels').hidden=!v.levels;
   if(v.levels){$('#coach-entry').textContent=fmt(v.levels.entry)+' USDT';$('#coach-target').textContent=fmt(v.levels.target)+' USDT';$('#coach-stop').textContent=fmt(v.levels.stop)+' USDT'}
@@ -32,13 +33,13 @@ export async function initObserver({api,extension,showPage,fmt}){
  function showReport(){
   if(!report)return;
   const rows=[['Разработка',report.development],['Проверка',report.validation],['Финальный тест',report.finalTest],['Двойная комиссия',report.stress]];
-  $('#backtest-output').textContent=rows.map(([n,r])=>`${n}: ${fmt(r.pnl)} USDT · ${r.tradeCount} сделок · просадка ${fmt(r.maxDrawdownPercent)}%`).join('\n')+`\nУдержание BTC в финальном периоде: ${fmt(report.finalTest.buyHoldPnl)} USDT\nХранение USDT: 0 USDT\n${report.gateReason}\n${report.paperGate?'':'Учебная сессия разрешена только для исследования провалившей отбор стратегии. Реальная торговля закрыта.'}\nДанные получены: ${new Date(report.dataReceivedAt).toLocaleString()}\n`+report.limitations.join('\n');
+  $('#backtest-output').textContent=rows.map(([n,r])=>`${n}: ${fmt(r.pnl)} USDT · ${r.tradeCount} сделок · просадка ${fmt(r.maxDrawdownPercent)}%`).join('\n')+`\nУдержание BTC в финальном периоде: ${fmt(report.finalTest.buyHoldPnl)} USDT\nХранение USDT: 0 USDT\n${report.gateReason}\n${report.paperGate?'':'Учебный эксперимент требует отдельного подтверждения в главной карточке. Реальная торговля закрыта.'}\nДанные получены: ${new Date(report.dataReceivedAt).toLocaleString()}\n`+report.limitations.join('\n');
  }
  function showPaper(){
   showCoach();
   $('#paper-start').disabled=!!paper||!report?.experimentReady||Date.now()-report.dataReceivedAt>86400000;
   const fresh=lastStrategy&&Math.abs(Date.now()-lastStrategy.market.sourceTime)<30000;
-  $('#paper-open').disabled=!running||!paper||!!paper.position||paper.halted||!fresh||lastStrategy.candidate.signal!=='paper-candidate'||!report?.experimentReady||Date.now()-report.dataReceivedAt>86400000;
+  $('#paper-open').disabled=!running||(report?.paperGate!==true&&!researchAllowed(paper,report))||!paper||!!paper.position||paper.halted||!fresh||lastStrategy.candidate.signal!=='paper-candidate'||!report?.experimentReady||Date.now()-report.dataReceivedAt>86400000;
   $('#paper-close').disabled=!running||!paper?.position;
   if(!paper){$('#paper-output').textContent='Учебный счёт: 1 000 виртуальных USDT. Цель эксперимента: +10 USDT. До проверки истории входы закрыты.';return}
   const p=paper.position;
@@ -104,7 +105,7 @@ export async function initObserver({api,extension,showPage,fmt}){
  $('#watch-review').onclick=()=>{const symbol=context?.symbol||'BTCUSDT';$('#risk-form').elements.symbol.value=symbol;showPage('risk')};
  for(const control of ['buy','limit'])$('#guide-'+control).onclick=async()=>{if(!extension){line('Подсветка доступна в расширении.');return}try{const r=await chrome.runtime.sendMessage({type:'highlight',control});if(r.error)throw Error(r.error);line(r.found===1?'Элемент обведён на странице. Нажатия и отправки заявки не было.':`Найдено элементов: ${r.found}. Однозначно подсветить не удалось.`)}catch(e){line(e.message)}};
  $('#experiment-export').onclick=()=>{const blob=new Blob([JSON.stringify({report,paper},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='trade-lens-experiment.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
- $('#coach-action').onclick=async()=>{const action=coachAction;if(action==='buy')await $('#paper-open').onclick();else if(action==='start'||action==='prepare')await prepareCoach();else if(action==='retry'){coachError='';lastQuoteAt=0;if(!report?.experimentReady)await prepareCoach();else showCoach()}};
+ $('#coach-action').onclick=async()=>{const action=coachAction;if(action==='buy')await $('#paper-open').onclick();else if(action==='research'){try{paper=enableResearch(paper||createPaper(),report);coachError='';await save();showPaper()}catch(e){coachError=e.message;showCoach()}}else if(action==='start'||action==='prepare')await prepareCoach();else if(action==='retry'){coachError='';lastQuoteAt=0;if(!report?.experimentReady)await prepareCoach();else showCoach()}};
  $('#coach-pause').onclick=stop;
  $('#disconnect').addEventListener('click',()=>void stop());
  if(extension)$('#watch-symbol-label').hidden=true;showReport();showPaper();
