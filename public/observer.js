@@ -1,13 +1,16 @@
+import {initDashboard} from './dashboard.js';
 import {coachView} from './coach.js';
 import {createPaper,openPaper,markPaper} from './paper.js';
 export async function initObserver({api,extension,showPage,fmt}){
  const $=s=>document.querySelector(s);
+ const renderDashboard=initDashboard();
  let running=false,timer=null,epoch=0,context=null,lastQuoteAt=0,lastSnapshot=null,lastStrategy=null,marketKey='',quoteBusy=false,aiBusy=false,lastAIKey='',aiTimes=[],lastAIAt=0,report=null,paper=null;
  let preparing=false,coachError='',coachAction=null,launch=0;
  const save=async()=>{const data={report,paper};if(extension)await chrome.storage.local.set({experiment:data});else localStorage.setItem('trade-lens-experiment',JSON.stringify(data))};
  try{const saved=extension?(await chrome.storage.local.get('experiment')).experiment:JSON.parse(localStorage.getItem('trade-lens-experiment')||'null');if(saved){report=saved.report;if(saved.paper?.version===1&&Number.isFinite(saved.paper.cash)&&Array.isArray(saved.paper.trades))paper=saved.paper;}}catch{}
  const line=s=>{$('#watch-status').textContent=s};
  function showCoach(){
+  renderDashboard({paper,running,context,snapshot:lastStrategy});
   const v=coachView({running,preparing,error:coachError,report,paper,context,snapshot:lastStrategy});coachAction=v.action;
   $('#coach-title').textContent=v.title;$('#coach-body').textContent=v.body;$('#coach-action').textContent=v.label;$('#coach-action').disabled=!v.action||preparing;
   $('#coach-pause').hidden=!running&&!preparing;$('#coach-levels').hidden=!v.levels;

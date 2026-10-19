@@ -18,9 +18,9 @@ $('#connect').onclick=async()=>{try{
  if(extension){const u=new URL($('#backend').value.trim());if(u.protocol!=='https:'||!u.hostname.endsWith('.vercel.app')||u.username||u.password||u.port||u.search||u.hash||u.pathname!=='/')throw new Error('Нужен корневой HTTPS-адрес проекта .vercel.app.');base=u.origin;
  const allowed=await chrome.permissions.request({origins:[base+'/*']});if(!allowed)throw new Error('Не разрешён доступ к выбранному серверу.');}
  config={base,token};const d=await api('status');if(extension)await chrome.storage.local.set({config});
- $('#token').value='';$('#setup').open=false;$('#advanced').open=false;status('Сервер доступен. '+(d.polzaConfigured?'Ключ Polza задан; модель ещё нужно проверить.':'В Vercel отсутствует ключ Polza.')+' Торговля отключена.');
+ $('#token').value='';$('#setup').open=false;$('#advanced').open=false;document.body.dataset.connection='ready';status('Сервер доступен. '+(d.polzaConfigured?'Ключ Polza задан; модель ещё нужно проверить.':'В Vercel отсутствует ключ Polza.')+' Торговля отключена.');
  }catch(e){status(e.message)}};
-$('#disconnect').onclick=async()=>{config.token='';if(extension){await chrome.storage.local.remove('config');await chrome.storage.session.clear()}clearCapture();$('#setup').open=true;globalThis.speechSynthesis?.cancel();status('Код доступа удалён.');};
+$('#disconnect').onclick=async()=>{config.token='';if(extension){await chrome.storage.local.remove('config');await chrome.storage.session.clear()}clearCapture();$('#setup').open=true;globalThis.speechSynthesis?.cancel();document.body.dataset.connection='missing';$('#advanced').open=true;status('Код доступа удалён.');};
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 $('#capture').onclick=async()=>{try{const r=await chrome.runtime.sendMessage({type:'select'});if(r.error)throw new Error(r.error);status('Обведи область на странице Bybit. Esc — отмена.')}catch(e){status(e.message);$('#capture-info').textContent=e.message}};
 $('#remove-capture').onclick=async()=>{clearCapture();if(extension)await chrome.storage.session.set({capture:null})};
@@ -66,4 +66,4 @@ ${d.explanation||d.explanationError}
  }catch(e){$('#risk-output').textContent=e.message}finally{$('#review').disabled=false}
 };
 $('#open-review').onclick=()=>showPage('risk');
-(async()=>{clearCapture();if(extension){$('#capture').disabled=false;const stored=await chrome.storage.local.get('config');if(stored.config){config=stored.config;$('#backend').value=config.base;$('#setup').open=false;status('Настройки загружены. Соединение в этой сессии ещё не проверено.');}chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&changes.capture)loadCapture()});await loadCapture();}else{$('#backend-label').hidden=true;$('#capture').hidden=true;}if(!config.token)$('#advanced').open=true;await initObserver({api,extension,showPage,fmt});})();
+(async()=>{clearCapture();if(extension){$('#capture').disabled=false;const stored=await chrome.storage.local.get('config');if(stored.config){config=stored.config;$('#backend').value=config.base;$('#setup').open=false;status('Настройки загружены. Соединение в этой сессии ещё не проверено.');}chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&changes.capture)loadCapture()});await loadCapture();}else{$('#backend-label').hidden=true;$('#capture').hidden=true;}document.body.dataset.connection=config.token?'ready':'missing';if(!config.token)$('#advanced').open=true;await initObserver({api,extension,showPage,fmt});})();

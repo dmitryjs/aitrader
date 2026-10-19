@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {periodStart,periodStats,reasonLabel} from '../extension/dashboard.js';
+test('today starts at Moscow midnight rather than UTC midnight',()=>{const now=Date.parse('2026-10-19T00:30:00+03:00');assert.equal(periodStart('today',now),Date.parse('2026-10-19T00:00:00+03:00'));assert.equal(periodStart('week',now),Date.parse('2026-10-13T00:00:00+03:00'));assert.equal(periodStart('month',now),Date.parse('2026-09-20T00:00:00+03:00'))});
+test('period totals use closure time, include losses and exclude open and future trades',()=>{const now=Date.parse('2026-10-19T15:00:00+03:00'),today=periodStart('today',now);const paper={position:{cost:100},equity:1500,cash:1000,trades:[{openedAt:today-86400000,closedAt:today,pnl:10},{closedAt:today+1,pnl:-4},{closedAt:today-1,pnl:50},{closedAt:now+1,pnl:100},{closedAt:today+2,pnl:0}]};const r=periodStats(paper,'today',now);assert.equal(r.count,3);assert.equal(r.pnl,6);assert.equal(r.wins,1);assert.deepEqual(r.trades.map(t=>t.pnl),[0,-4,10]);assert.equal(periodStats(paper,'week',now).pnl,56)});
+test('empty history does not invent a return or trades',()=>{const r=periodStats(null,'all');assert.equal(r.count,0);assert.equal(r.pnl,0);assert.equal(r.wins,0)});
+test('gap and stop explanations remain distinct in trade history',()=>{assert.equal(reasonLabel('Перерыв наблюдения: выход по первой доступной цене'),'Закрыто после паузы');assert.equal(reasonLabel('Стоп по наблюдаемой цене'),'Цена упала до уровня выхода')});
