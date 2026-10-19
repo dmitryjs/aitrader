@@ -1,5 +1,5 @@
-import {AppError,authenticate,validateContext,calculateRisk} from '../lib/core.js';
-import {market,account,chat,modelInfo,reviewTrade} from '../lib/providers.js';
+import {AppError,authenticate,validateContext,calculateRisk,validateSymbol} from '../lib/core.js';
+import {market,account,chat,modelInfo,reviewTrade,observeMarket,explainObservation,strategySnapshot,testStrategy} from '../lib/providers.js';
 export const config={maxDuration:90};
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -22,7 +22,11 @@ export default async function handler(req,res){
   switch(b.action){
    case 'status':data={mode:'read-only',tradingEnabled:false,model:process.env.POLZA_MODEL||'openai/gpt-6-astra',polzaConfigured:!!process.env.POLZA_API_KEY,bybitDemoConfigured:!!(process.env.BYBIT_DEMO_API_KEY&&process.env.BYBIT_DEMO_API_SECRET),notice:'Наличие ключа не означает проверенное соединение.'};break;
    case 'checkModel':data=await modelInfo(process.env);break;
-   case 'market':data=await market();break;
+   case 'strategy':data=await strategySnapshot();break;
+   case 'backtest':data=await testStrategy();break;
+   case 'observe':data=await observeMarket(validateSymbol(b.symbol));break;
+   case 'observeExplain':data=await explainObservation(validateSymbol(b.symbol),process.env);break;
+   case 'market':data=await market(validateSymbol(b.symbol));break;
    case 'account':data=await account(process.env);break;
    case 'risk':data=calculateRisk(b);break;
    case 'review':data=await reviewTrade(b,process.env);break;

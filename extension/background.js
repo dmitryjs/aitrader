@@ -64,8 +64,53 @@ async function completeSelection(msg,sender){
  const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
  const u=new URL(bound.url);await chrome.storage.session.set({pending:null,capture:{image:'data:image/jpeg;base64,'+btoa(binary),url:u.origin+u.pathname,capturedAt:Date.now(),tabId:bound.tabId}});
 }
+async function watchContext(){
+ const bound=await boundActive();
+ const [focused]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
+ if(focused?.id!==bound.tabId)throw new Error('Наблюдение на паузе: вкладка Bybit не активна в текущем окне.');
+ const u=new URL(bound.url),match=u.pathname.match(/\/trade\/spot\/(BTC|ETH|SOL)\/USDT\/?$/i);
+ if(!match)throw new Error('Открой спотовую пару BTC/USDT, ETH/USDT или SOL/USDT. Контракты и маржа этим режимом не поддерживаются.');
+ const results=await chrome.scripting.executeScript({target:{tabId:bound.tabId},func:()=>{
+  const allowed=['Купить','Продать','Buy','Sell','Лимитный','Рыночный','Limit','Market','TP/SL'];
+  const label=el=>{const node=el?.closest?.('button,[role="button"],[role="tab"]');const t=node?.textContent?.trim();return allowed.includes(t)?t:null};
+  if(!globalThis.__tradeLensWatch){
+   const state={pointer:null,lastClick:null};
+   const move=e=>{state.pointer={x:Math.round(e.clientX),y:Math.round(e.clientY),label:label(e.target),at:Date.now()}};
+   const click=e=>{const t=label(e.target);if(t)state.lastClick={label:t,at:Date.now()}};
+   document.addEventListener('pointermove',move,{passive:true});document.addEventListener('click',click,true);
+   globalThis.__tradeLensWatch={state,remove(){document.removeEventListener('pointermove',move);document.removeEventListener('click',click,true)}};
+  }
+  const labels=[...document.querySelectorAll('button,[role="button"],[role="tab"]')].filter(el=>el.getClientRects().length).map(el=>label(el)).filter(Boolean);
+  return {labels:[...new Set(labels)],...globalThis.__tradeLensWatch.state};
+ }});
+ const after=await boundActive();if(after.url!==bound.url)throw new Error('Страница сменилась. Контекст обновляется.');
+ return {tabId:bound.tabId,url:u.origin+u.pathname,symbol:match[1].toUpperCase()+'USDT',market:'spot',ui:results?.[0]?.result??{labels:[]}};
+}
+async function stopWatch(){
+ const {bound}=await chrome.storage.session.get('bound');if(!bound)return;
+ try{await chrome.scripting.executeScript({target:{tabId:bound.tabId},func:()=>{globalThis.__tradeLensWatch?.remove();delete globalThis.__tradeLensWatch;document.querySelectorAll('[data-trade-lens-highlight]').forEach(el=>el.removeAttribute('data-trade-lens-highlight'));document.getElementById('__trade_lens_coach_style')?.remove()}})}catch{}
+}
+async function highlightControl(control){
+ if(!['buy','limit'].includes(control))throw new Error('Неизвестный элемент.');
+ const bound=await boundActive();
+ const r=await chrome.scripting.executeScript({target:{tabId:bound.tabId},args:[control],func:control=>{
+  const names=control==='buy'?['Купить','Buy']:['Лимитный','Limit'];
+  const items=[...document.querySelectorAll('button,[role="button"],[role="tab"]')].filter(el=>el.getClientRects().length&&names.includes(el.textContent?.trim()));
+  if(items.length!==1)return {found:items.length};
+  document.querySelectorAll('[data-trade-lens-highlight]').forEach(el=>el.removeAttribute('data-trade-lens-highlight'));
+  let style=document.getElementById('__trade_lens_coach_style');if(!style){style=document.createElement('style');style.id='__trade_lens_coach_style';style.textContent='[data-trade-lens-highlight]{outline:3px solid #c3e697!important;outline-offset:4px!important}';document.documentElement.append(style)}
+  items[0].setAttribute('data-trade-lens-highlight','true');return {found:1};
+ }});return r[0].result;
+}
 chrome.runtime.onMessage.addListener((msg,sender,respond)=>{
  (async()=>{
+  if(['watchStart','watchContext','watchStop','highlight'].includes(msg.type)){
+   if(sender.tab)throw new Error('Команда доступна только панели.');
+   if(msg.type==='watchStop'){await stopWatch();return {ok:true}}
+   if(msg.type==='highlight')return await highlightControl(msg.control);
+   if(msg.type==='watchStart'){const [active]=await chrome.tabs.query({active:true,lastFocusedWindow:true});await bind(active)}
+   return await watchContext();
+  }
   if(msg.type==='select'){if(sender.tab)throw new Error('Команда доступна только панели.');await startSelection();return {ok:true};}
   if(msg.type==='selection'){await completeSelection(msg,sender);return {ok:true};}
   if(msg.type==='cancelSelection'){const {pending}=await chrome.storage.session.get('pending');if(pending?.nonce===msg.nonce&&sender.tab?.id===pending.tabId)await chrome.storage.session.set({pending:null});return {ok:true};}
