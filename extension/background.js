@@ -21,9 +21,15 @@ async function boundActive(){
  return {...bound,url:active.url};
 }
 async function startSelection(){
+ // A panel can outlive a reload or be reopened by the browser itself.
+ // Recover only on an explicit selection request and an already accessible Bybit tab.
+ const [active]=await chrome.tabs.query({active:true,lastFocusedWindow:true});
+ if(!active?.url)throw new Error('Нет доступа к вкладке. На странице Bybit нажми значок Trade Lens в панели браузера или Alt+Shift+X. Открытия боковой панели недостаточно.');
+ if(!valid(active.url))throw new Error('Выделение доступно только на https://www.bybit.com или https://bybit.com.');
+ await bind(active);
  const bound=await boundActive(),nonce=crypto.randomUUID();
  await chrome.storage.session.set({capture:null,pending:{nonce,tabId:bound.tabId,createdAt:Date.now()}});
- await chrome.scripting.executeScript({target:{tabId:bound.tabId},args:[nonce],func:nonce=>{
+ try{await chrome.scripting.executeScript({target:{tabId:bound.tabId},args:[nonce],func:nonce=>{
   document.getElementById('__trade_lens_selection')?.remove();
   const overlay=document.createElement('div');overlay.id='__trade_lens_selection';overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.2);cursor:crosshair;touch-action:none';
   const box=document.createElement('div');box.style.cssText='position:absolute;border:2px solid #d9fba3;background:rgba(217,251,163,.1);pointer-events:none';overlay.append(box);
@@ -35,7 +41,10 @@ async function startSelection(){
   overlay.addEventListener('pointerup',e=>{if(!start)return;const x=Math.max(0,Math.min(start.x,e.clientX)),y=Math.max(0,Math.min(start.y,e.clientY)),width=Math.min(innerWidth-x,Math.abs(start.x-e.clientX)),height=Math.min(innerHeight-y,Math.abs(start.y-e.clientY));clean();
    requestAnimationFrame(()=>requestAnimationFrame(()=>chrome.runtime.sendMessage({type:'selection',nonce,rect:{x,y,width,height,vw:innerWidth,vh:innerHeight}}).catch(()=>{})));
   });
- }});
+ }});}catch{
+  await chrome.storage.session.set({pending:null});
+  throw new Error('Браузер не разрешил выделение. На вкладке Bybit нажми значок Trade Lens в панели браузера или Alt+Shift+X.');
+ }
 }
 async function completeSelection(msg,sender){
  const {pending}=await chrome.storage.session.get('pending');
@@ -44,6 +53,8 @@ async function completeSelection(msg,sender){
  if(!r||!Object.values(r).every(Number.isFinite)||r.width<8||r.height<8||r.vw<=0||r.vh<=0||r.x<0||r.y<0||r.x+r.width>r.vw+1||r.y+r.height>r.vh+1)throw new Error('Выдели область больше 8 пикселей.');
  const full=await chrome.tabs.captureVisibleTab(bound.windowId,{format:'png'});
  await boundActive(); // Abort if user switched during capture.
+ const latest=await chrome.storage.session.get('pending');
+ if(latest.pending?.nonce!==msg.nonce)throw new Error('Страница изменилась во время снимка. Выдели область заново.');
  const bitmap=await createImageBitmap(await (await fetch(full)).blob());
  const sx=bitmap.width/r.vw,sy=bitmap.height/r.vh;
  const scale=Math.min(1,1400/(r.width*sx),1400/(r.height*sy));
@@ -63,5 +74,11 @@ chrome.runtime.onMessage.addListener((msg,sender,respond)=>{
  })().then(respond).catch(async e=>{if(msg.type==='selection')await chrome.storage.session.set({capture:{error:e.message},pending:null});respond({error:e.message})});return true;
 });
 chrome.tabs.onActivated.addListener(async({tabId})=>{const {bound}=await chrome.storage.session.get('bound');if(bound&&tabId!==bound.tabId)await chrome.storage.session.set({capture:null,pending:null})});
-chrome.tabs.onUpdated.addListener(async(tabId,info)=>{const {bound}=await chrome.storage.session.get('bound');if(bound?.tabId===tabId&&(info.url||info.status==='loading'))await chrome.storage.session.set({capture:null,pending:null,bound:null})});
+chrome.tabs.onUpdated.addListener(async(tabId,info)=>{
+ const {bound}=await chrome.storage.session.get('bound');
+ if(bound?.tabId!==tabId||!(info.url||info.status==='loading'))return;
+ const url=info.url||bound.url;
+ const sameOrigin=valid(url)&&new URL(url).origin===new URL(bound.url).origin;
+ await chrome.storage.session.set({capture:null,pending:null,bound:sameOrigin?{...bound,url}:null});
+});
 chrome.tabs.onRemoved.addListener(async tabId=>{const {bound}=await chrome.storage.session.get('bound');if(bound?.tabId===tabId)await chrome.storage.session.clear()});

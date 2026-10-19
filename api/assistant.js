@@ -1,5 +1,5 @@
 import {AppError,authenticate,validateContext,calculateRisk} from '../lib/core.js';
-import {market,account,chat,modelInfo} from '../lib/providers.js';
+import {market,account,chat,modelInfo,reviewTrade} from '../lib/providers.js';
 export const config={maxDuration:90};
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
@@ -25,6 +25,7 @@ export default async function handler(req,res){
    case 'market':data=await market();break;
    case 'account':data=await account(process.env);break;
    case 'risk':data=calculateRisk(b);break;
+   case 'review':data=await reviewTrade(b,process.env);break;
    case 'chat':data=await chat(validateContext(b),process.env);break;
    default:throw new AppError(400,'Неизвестная операция. Отправка заявок в этой версии отсутствует.');
   }

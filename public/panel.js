@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s),extension=!!globalThis.chrome?.runtime?.id;
 let config={base:location.origin,token:''},context=null,busy=false,answerText='';
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==id)}
 const fmt=n=>Number(n).toLocaleString('ru-RU',{maximumFractionDigits:8});
 function status(s){$('#status').textContent=s;}
 async function api(action,data={}){
@@ -19,8 +20,8 @@ $('#connect').onclick=async()=>{try{
  $('#token').value='';$('#setup').open=false;status('Сервер доступен. '+(d.polzaConfigured?'Ключ Polza задан; модель ещё нужно проверить.':'В Vercel отсутствует ключ Polza.')+' Торговля отключена.');
  }catch(e){status(e.message)}};
 $('#disconnect').onclick=async()=>{config.token='';if(extension){await chrome.storage.local.remove('config');await chrome.storage.session.clear()}clearCapture();$('#setup').open=true;globalThis.speechSynthesis?.cancel();status('Код доступа удалён.');};
-document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>document.querySelectorAll('.page').forEach(p=>p.hidden=p.id!==b.dataset.page));
-$('#capture').onclick=async()=>{try{const r=await chrome.runtime.sendMessage({type:'select'});if(r.error)throw new Error(r.error);status('Обведи область на странице Bybit. Esc — отмена.')}catch(e){status(e.message)}};
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>showPage(b.dataset.page));
+$('#capture').onclick=async()=>{try{const r=await chrome.runtime.sendMessage({type:'select'});if(r.error)throw new Error(r.error);status('Обведи область на странице Bybit. Esc — отмена.')}catch(e){status(e.message);$('#capture-info').textContent=e.message}};
 $('#remove-capture').onclick=async()=>{clearCapture();if(extension)await chrome.storage.session.set({capture:null})};
 $('#ask').onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;$('#submit').disabled=true;status('Запрос к модели…');try{
  if(context&&extension){const r=await chrome.runtime.sendMessage({type:'validateTab'});if(r.error||r.bound?.tabId!==context.tabId)throw new Error('Вкладка изменилась. Выдели область заново.');}
@@ -32,4 +33,36 @@ $('#market').onclick=async()=>{try{const d=await api('market');$('#market-output
 $('#account').onclick=async()=>{try{const d=await api('account');$('#account-output').textContent=`Bybit DEMO · только чтение\nОценка счёта: ${d.totalEquityUSD??'не получена'} USD\n`+d.coins.map(c=>`${c.coin}: кошелёк ${c.walletBalance}; заблокировано ${c.locked??'не получено'}`).join('\n')+'\n'+d.note+'\nПолучено: '+new Date(d.receivedAt).toLocaleString();}catch(e){$('#account-output').textContent=e.message}};
 $('#model-check').onclick=async()=>{try{const d=await api('checkModel');$('#model-output').textContent=`Модель найдена: ${d.id}\nИзображения по каталогу: ${d.imageSupported?'поддерживаются':'не подтверждены'}\nФактический текстовый/визуальный запрос проверяется отдельно.`;}catch(e){$('#model-output').textContent=e.message}};
 $('#risk-form').onsubmit=async e=>{e.preventDefault();try{const values=Object.fromEntries([...new FormData(e.target)].map(([k,v])=>[k,Number(v)]));const d=await api('risk',values);$('#risk-output').textContent=`Количество: ${fmt(d.quantity)} BTC\nНужно средств: ${fmt(d.cashRequired)} USDT\nУбыток по сценарию: ${fmt(d.estimatedLoss)} USDT\n\n${d.notice}`;}catch(e){$('#risk-output').textContent=e.message}};
+$('#entry-market').onclick=async()=>{try{
+ const d=await api('market');$('#risk-form').elements.entry.value=d.price;
+ $('#risk-output').textContent='Последняя цена: '+fmt(d.price)+' USDT · ответ Bybit '+new Date(d.sourceTime).toLocaleString()+'. Это ориентир входа, не гарантированная цена исполнения.';
+}catch(e){$('#risk-output').textContent=e.message}};
+$('#review').onclick=async()=>{
+ const form=$('#risk-form');if(!form.reportValidity())return;
+ const values=Object.fromEntries([...new FormData(form)].map(([k,v])=>[k,Number(v)]));
+ $('#review').disabled=true;$('#risk-output').textContent='Проверка цены, расчёт и объяснение Astra…';
+ try{const d=await api('review',values),p=d.plan;
+ $('#risk-output').textContent=`ПЛАН ПОКУПКИ BTC/USDT · БЕЗ ПЛЕЧА
+Последняя цена Bybit: ${fmt(d.market.price)} USDT
+Время ответа API: ${new Date(d.market.sourceTime).toLocaleString()}
+Твой вход: ${fmt(p.entry)} · отличие от цены: ${fmt(d.entryDistancePercent)}%
+Стоп: ${fmt(p.stop)} · цель: ${fmt(p.target)}
+
+РАСЧЁТ КОДОМ
+Количество: ${fmt(p.quantity)} BTC
+Нужно средств с расходами: ${fmt(p.cashRequired)} USDT
+Убыток у стопа с расходами: ${fmt(p.estimatedLoss)} USDT
+Результат у цели с расходами: ${fmt(p.estimatedProfit)} USDT
+Результат / риск: ${fmt(p.rewardRisk)}
+Цена безубыточности с расходами: ${fmt(p.breakEvenPrice)} USDT
+
+${d.warnings.join('\n')}
+
+ОБЪЯСНЕНИЕ ${d.model||'НЕДОСТУПНО'}
+${d.explanation||d.explanationError}
+
+Заявка не отправлена. Это сценарий, не торговый сигнал.`;
+ }catch(e){$('#risk-output').textContent=e.message}finally{$('#review').disabled=false}
+};
+$('#open-review').onclick=()=>showPage('risk');
 (async()=>{clearCapture();if(extension){$('#capture').disabled=false;const stored=await chrome.storage.local.get('config');if(stored.config){config=stored.config;$('#backend').value=config.base;$('#setup').open=false;status('Настройки загружены. Соединение в этой сессии ещё не проверено.');}chrome.storage.onChanged.addListener((changes,area)=>{if(area==='session'&&changes.capture)loadCapture()});await loadCapture();}else{$('#backend-label').hidden=true;$('#capture').hidden=true;}})();
