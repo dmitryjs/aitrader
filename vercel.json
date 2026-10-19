@@ -1,0 +1,1 @@
+{"version":2,"framework":null,"outputDirectory":"public","functions":{"api/assistant.js":{"maxDuration":90}},"regions":["fra1"],"headers":[{"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"Referrer-Policy","value":"no-referrer"},{"key":"X-Frame-Options","value":"DENY"}]}]}
