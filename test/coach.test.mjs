@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {coachView} from '../extension/coach.js';
+import {createPaper,openPaper} from '../extension/paper.js';
+const now=Date.now();
+const snapshot={market:{symbol:'BTCUSDT',market:'spot',bid:100,ask:100.01,sourceTime:now},candidate:{signal:'paper-candidate',candleClosedAt:now-1000,atr:2}};
+const report={experimentReady:true,paperGate:true,rules:{id:'btc-ema-cross-v1'},dataReceivedAt:now};
+const state={running:true,report,paper:createPaper(now),context:{symbol:'BTCUSDT'},snapshot,now};
+test('one step view gives no purchase instruction before a successful historical gate',()=>{const v=coachView({...state,report:{...report,paperGate:false}});assert.equal(v.action,null);assert.match(v.title,/ничего не покупать/);assert.match(v.body,/не прошла/)});
+test('stale or absent quotes never become a purchase instruction',()=>{for(const snapshot of [null,{...state.snapshot,market:{...state.snapshot.market,sourceTime:now-60000}}])assert.equal(coachView({...state,snapshot}).action,null)});
+test('buy instruction names virtual money and carries exact previewed cost and exit levels',()=>{const v=coachView(state),p=openPaper(state.paper,snapshot,report,now).position;assert.equal(v.action,'buy');assert.match(v.title,/виртуально/);assert.match(v.body,/На сайте Bybit ничего покупать не нужно/);assert.deepEqual(v.levels,p);assert.ok(p.cost<=200)});
+test('holding and paused positions cannot produce a second buy instruction',()=>{const paper=openPaper(state.paper,snapshot,report,now);assert.equal(coachView({...state,paper}).action,null);const paused=coachView({...state,paper,running:false});assert.equal(paused.action,'start');assert.match(paused.body,/перерыва/)});
+test('preparation has one disabled state; wrong coin prompts navigation, not a buy',()=>{assert.equal(coachView({...state,preparing:true}).action,null);const v=coachView({...state,context:{symbol:'ETHUSDT'},snapshot:null});assert.match(v.title,/Открой BTC/);assert.equal(v.action,null)});
